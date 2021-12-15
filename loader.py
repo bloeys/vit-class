@@ -1,9 +1,17 @@
 import h5py
 import torch
 import numpy as np
+from torchvision import datasets, transforms
 
-dataDir = "./vit-class/data/"
+dataDir = "./dense201-stn/data/"
 
+img_transforms = transforms.Compose([
+    transforms.Resize(224),
+    transforms.RandomAffine(180, (0.25, 0.25), (0.5, 1)),
+
+    #This is needed by pretrained models according to pytorch docs
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
 
 class PCamDataset(torch.utils.data.Dataset):
 
@@ -19,12 +27,12 @@ class PCamDataset(torch.utils.data.Dataset):
         self.labels = np.array(hfFile.get(labelKey))
         hfFile.close()
 
-    def __getitem__(self, index):
-
+    def __getitem__(self, index):    
+        #This converts pixels to be 0->1 and from H*W*C to C*H*W
+        x = torch.from_numpy(self.data[index]).permute(2, 0, 1).float()/255
+        tx = img_transforms(x)
         return (
-            #Channels are last (96,96,3) but we need it to be first (3,96,96) so move it around
-            torch.from_numpy(self.data[index]).float().permute(2, 0, 1),
-            #Labels is in the form [[[0]]], but we only need the value, so we use squeeze
+            tx,
             torch.from_numpy(np.squeeze(self.labels[index])))
 
     def __len__(self):
@@ -39,8 +47,7 @@ def GetTrainLoader():
     print('training data loaded with', trainData.__len__(), 'elements')
 
     # num_workers must be zero otherwise we get an error
-    trainLoader = torch.utils.data.DataLoader(
-        trainData, batch_size=64, shuffle=True, num_workers=0)
+    trainLoader = torch.utils.data.DataLoader(trainData, batch_size=64, shuffle=True, num_workers=0)
 
     return trainLoader
 
@@ -52,8 +59,7 @@ def GetTestLoader():
                            dataDir+'camelyonpatch_level_2_split_test_y.h5', 'x', 'y')
     print('test data loaded with', testData.__len__(), 'elements')
 
-    testLoader = torch.utils.data.DataLoader(
-        testData, batch_size=64, shuffle=True, num_workers=0)
+    testLoader = torch.utils.data.DataLoader(testData, batch_size=64, shuffle=True, num_workers=0)
 
     return testLoader
 
@@ -65,7 +71,6 @@ def GetValidationLoader():
                             dataDir+'camelyonpatch_level_2_split_test_y.h5', 'x', 'y')
     print('validation data loaded with', validData.__len__(), 'elements')
 
-    validLoader = torch.utils.data.DataLoader(
-        validData, batch_size=64, shuffle=True, num_workers=0)
+    validLoader = torch.utils.data.DataLoader(validData, batch_size=64, shuffle=True, num_workers=0)
 
     return validLoader
